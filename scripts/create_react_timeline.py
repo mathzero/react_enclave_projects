@@ -15,7 +15,7 @@ from textwrap import wrap
 ROOT = Path(__file__).resolve().parents[1]
 DATA_FILE = ROOT / "data" / "react_datasets_timeline.csv"
 CLINICAL_PHASE_FILE = ROOT / "data" / "react_clinical_cohort_phases.csv"
-OUT_FILE = ROOT / "assets" / "react-datasets-timeline-v2.svg"
+OUT_FILE = ROOT / "assets" / "react-datasets-timeline-v3.svg"
 
 
 @dataclass
@@ -155,7 +155,7 @@ def render_svg(studies: list[Study], clinical_phases: list[ClinicalPhase]) -> st
         rounded_rect(28, 28, width - 56, height - 56, "#fbfcfd", 28, "#d9e2ec", 1),
         text(70, 88, "REACT Data Assets: Fieldwork Timeline and Cohort Relationships", 32, 750, "#17212b"),
         text(70, 130, "Bars show data collection windows; circles show approximate cohort/sample size on a square-root scale.", 18, 400, "#52616f"),
-        text(70, 160, "Follow-up studies are subsets of the original REACT respondent base, with linkage governed by participant consent.", 18, 400, "#52616f"),
+        text(70, 160, "REACT-1 and REACT-2 are subcomponents of the original respondent base; follow-up studies are recontacted subsets.", 18, 400, "#52616f"),
     ]
 
     # Plot area grid.
@@ -169,6 +169,20 @@ def render_svg(studies: list[Study], clinical_phases: list[ClinicalPhase]) -> st
     # A light band for the pandemic surveillance period covered by the original respondent base.
     svg.append(rounded_rect(x_for(date(2020, 4, 1)), plot_top - 42, x_for(date(2022, 3, 31)) - x_for(date(2020, 4, 1)), plot_bottom - plot_top + 84, "#f1f5f9", 10, opacity=0.72))
     svg.append(text(x_for(date(2021, 4, 1)), plot_top - 18, "Original REACT pandemic surveillance period", 14, 650, "#6b7785", "middle"))
+
+    # Make the parent/subcomponent relationship explicit for REACT-1 and REACT-2.
+    react1_y = plot_top + row_gap
+    react2_y = plot_top + 2 * row_gap
+    bracket_x = plot_left + 20
+    svg.append(path(
+        f"M{bracket_x:.1f},{react1_y - 28:.1f} L{bracket_x - 16:.1f},{react1_y - 28:.1f} "
+        f"L{bracket_x - 16:.1f},{react2_y + 28:.1f} L{bracket_x:.1f},{react2_y + 28:.1f}",
+        "#5f6c7b",
+        2.0,
+        opacity=0.70,
+    ))
+    svg.append(text(bracket_x + 10, (react1_y + react2_y) / 2 - 6, "REACT-1/2 subcomponents", 13, 750, "#344054"))
+    svg.append(text(bracket_x + 10, (react1_y + react2_y) / 2 + 12, "within the parent respondent base", 12, 500, "#52616f"))
 
     # Rows and bars.
     baseline_y = plot_top
@@ -222,7 +236,7 @@ def render_svg(studies: list[Study], clinical_phases: list[ClinicalPhase]) -> st
                 label = f"{phase.phase}: {phase.start.strftime('%d %b')} to {phase.end.strftime('%d %b %Y')}"
                 svg.append(text(legend_x + 18, legend_y - 1, label, 12, 500, "#52616f"))
 
-        if study.relationship:
+        if study.relationship and not study.relationship.startswith("subcomponent"):
             # Show subset relationship back to the baseline row.
             hook_x = x0 - 18
             svg.append(path(
@@ -249,20 +263,6 @@ def render_svg(studies: list[Study], clinical_phases: list[ClinicalPhase]) -> st
         for line_no, wrapped_line in enumerate(wrapped):
             svg.append(text(note_x + 24, cursor_y + line_no * 19, wrapped_line, 15, 450, "#344054"))
         cursor_y += 24 + len(wrapped) * 19
-
-    source_x, source_y = 1015, 820
-    svg.append(text(source_x, source_y, "Source context used", 20, 750, "#17212b"))
-    sources = [
-        "Imperial REACT study pages: REACT-1, REACT-2, REACT Long COVID, REACT GE/LC Clinical, and REACT follow-up survey.",
-        "Atchison et al., Nature Communications 2023: REACT-1/2 fieldwork windows, 2022 Long COVID invitation dates, response counts, and linkage-consent frame.",
-        "User-provided project notes and REACT Bio cohort plot: clinical cohort phase dates, initial N~3.5M, 2025 new cohort N~800k, and linkage status assumptions.",
-    ]
-    cursor_y = source_y + 34
-    for source in sources:
-        wrapped = wrap(source, width=72)
-        for line_no, line in enumerate(wrapped):
-            svg.append(text(source_x, cursor_y + line_no * 18, line, 14, 450, "#52616f"))
-        cursor_y += 23 + len(wrapped) * 18
 
     svg.append(text(width - 70, height - 48, "Generated from data/react_datasets_timeline.csv and data/react_clinical_cohort_phases.csv", 12, 500, "#8294a8", "end"))
     svg.append("</svg>")

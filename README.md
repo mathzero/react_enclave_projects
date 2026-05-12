@@ -65,4 +65,4 @@ The enclave server has GPUs available. GPU access can be arranged for projects t
 
 ## REACT Data Assets
 
-![Timeline of REACT data assets](assets/react-datasets-timeline-v2.svg)
+![Timeline of REACT data assets](assets/react-datasets-timeline-v3.svg)

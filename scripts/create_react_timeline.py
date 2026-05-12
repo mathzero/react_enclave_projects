@@ -14,6 +14,7 @@ from textwrap import wrap
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_FILE = ROOT / "data" / "react_datasets_timeline.csv"
+CLINICAL_PHASE_FILE = ROOT / "data" / "react_clinical_cohort_phases.csv"
 OUT_FILE = ROOT / "assets" / "react-datasets-timeline.svg"
 
 
@@ -30,6 +31,15 @@ class Study:
     relationship: str
     details: str
     source_note: str
+
+
+@dataclass
+class ClinicalPhase:
+    phase: str
+    start: date
+    end: date
+    color: str
+    details: str
 
 
 def parse_date(value: str) -> date:
@@ -52,6 +62,21 @@ def load_studies() -> list[Study]:
                 relationship=row["relationship"],
                 details=row["details"],
                 source_note=row["source_note"],
+            )
+            for row in reader
+        ]
+
+
+def load_clinical_phases() -> list[ClinicalPhase]:
+    with CLINICAL_PHASE_FILE.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        return [
+            ClinicalPhase(
+                phase=row["phase"],
+                start=parse_date(row["start"]),
+                end=parse_date(row["end"]),
+                color=row["color"],
+                details=row["details"],
             )
             for row in reader
         ]
@@ -93,7 +118,7 @@ def path(points: str, stroke: str, width: float = 1.5, fill: str = "none",
     )
 
 
-def render_svg(studies: list[Study]) -> str:
+def render_svg(studies: list[Study], clinical_phases: list[ClinicalPhase]) -> str:
     width, height = 1840, 1120
     margin_left, margin_right = 540, 130
     plot_top, plot_bottom = 255, 720
@@ -102,10 +127,10 @@ def render_svg(studies: list[Study]) -> str:
 
     axis_start = date(2020, 1, 1)
     axis_end = date(2026, 12, 31)
-    total_months = month_index(axis_end) - month_index(axis_start) + 1
+    total_days = (axis_end - axis_start).days
 
     def x_for(day: date) -> float:
-        return plot_left + (month_index(day) - month_index(axis_start)) / (total_months - 1) * plot_width
+        return plot_left + (day - axis_start).days / total_days * plot_width
 
     rows = len(studies)
     row_gap = (plot_bottom - plot_top) / (rows - 1)
@@ -156,7 +181,15 @@ def render_svg(studies: list[Study]) -> str:
         bar_height = 38 if is_baseline else bar_h
 
         svg.append(path(f"M{plot_left - 8:.1f},{y:.1f} L{plot_right + 8:.1f},{y:.1f}", "#edf2f7", 1))
-        if study.precision == "year":
+        is_clinical = study.dataset.startswith("REACT clinical")
+
+        if is_clinical:
+            svg.append(rounded_rect(x0, bar_y - 4, max(12, x1 - x0), bar_height + 8, study.color, 9, opacity=0.10))
+            for phase_idx, phase in enumerate(clinical_phases):
+                phase_x0, phase_x1 = x_for(phase.start), x_for(phase.end)
+                phase_y = y - 24 + phase_idx * 12
+                svg.append(rounded_rect(phase_x0, phase_y, max(5, phase_x1 - phase_x0), 8, phase.color, 4, opacity=0.86))
+        elif study.precision == "year":
             svg.append(rounded_rect(x0, bar_y - 2, max(12, x1 - x0), bar_height, study.color, 9, opacity=0.17))
             svg.append(rounded_rect(x0, bar_y + 4, max(12, x1 - x0), bar_height - 12, study.color, 7, stroke=study.color, stroke_width=2, opacity=0.55, extra='stroke-dasharray="7 6"'))
         else:
@@ -173,10 +206,21 @@ def render_svg(studies: list[Study]) -> str:
         bar_label = f"{study.start.strftime('%b %Y')} to {study.end.strftime('%b %Y')}"
         if study.precision == "year":
             bar_label = f"{study.start.year} to {study.end.year} (year-level)"
+        elif study.precision == "day":
+            bar_label = f"{study.start.strftime('%d %b %Y')} to {study.end.strftime('%d %b %Y')}"
         if (x1 - x0) < 275:
             svg.append(text(x0 + 4, y - 24, bar_label, 14, 700, study.color))
         else:
             svg.append(text(x0 + 14, y + 6, bar_label, 14, 700, "#ffffff" if study.precision != "year" else "#17212b"))
+
+        if is_clinical:
+            legend_x = x_for(date(2022, 3, 1))
+            svg.append(text(legend_x, y - 26, "Clinical cohort phase detail", 13, 750, "#344054"))
+            for phase_idx, phase in enumerate(clinical_phases):
+                legend_y = y - 8 + phase_idx * 17
+                svg.append(rounded_rect(legend_x, legend_y - 9, 12, 8, phase.color, 2, opacity=0.86))
+                label = f"{phase.phase}: {phase.start.strftime('%d %b')} to {phase.end.strftime('%d %b %Y')}"
+                svg.append(text(legend_x + 18, legend_y - 1, label, 12, 500, "#52616f"))
 
         if study.relationship:
             # Show subset relationship back to the baseline row.
@@ -211,7 +255,7 @@ def render_svg(studies: list[Study]) -> str:
     sources = [
         "Imperial REACT study pages: REACT-1, REACT-2, REACT Long COVID, REACT GE/LC Clinical, and REACT follow-up survey.",
         "Atchison et al., Nature Communications 2023: REACT-1/2 fieldwork windows, 2022 Long COVID invitation dates, response counts, and linkage-consent frame.",
-        "User-provided project notes: initial N~3.5M, 2025 new cohort N~800k, and linkage status assumptions.",
+        "User-provided project notes and REACT Bio cohort plot: clinical cohort phase dates, initial N~3.5M, 2025 new cohort N~800k, and linkage status assumptions.",
     ]
     cursor_y = source_y + 34
     for source in sources:
@@ -220,14 +264,15 @@ def render_svg(studies: list[Study]) -> str:
             svg.append(text(source_x, cursor_y + line_no * 18, line, 14, 450, "#52616f"))
         cursor_y += 23 + len(wrapped) * 18
 
-    svg.append(text(width - 70, height - 48, "Generated from data/react_datasets_timeline.csv", 12, 500, "#8294a8", "end"))
+    svg.append(text(width - 70, height - 48, "Generated from data/react_datasets_timeline.csv and data/react_clinical_cohort_phases.csv", 12, 500, "#8294a8", "end"))
     svg.append("</svg>")
     return "\n".join(svg)
 
 
 def main() -> None:
     studies = load_studies()
-    OUT_FILE.write_text(render_svg(studies), encoding="utf-8")
+    clinical_phases = load_clinical_phases()
+    OUT_FILE.write_text(render_svg(studies, clinical_phases), encoding="utf-8")
     print(f"Wrote {OUT_FILE}")
 
 

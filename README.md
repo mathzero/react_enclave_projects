@@ -65,6 +65,4 @@ The enclave server has GPUs available. GPU access can be arranged for projects t
 
 ## REACT Data Assets
 
-![Timeline of REACT data assets](assets/react-datasets-timeline.svg)
-
-The timeline is generated from [`data/react_datasets_timeline.csv`](data/react_datasets_timeline.csv) and [`data/react_clinical_cohort_phases.csv`](data/react_clinical_cohort_phases.csv) using [`scripts/create_react_timeline.py`](scripts/create_react_timeline.py).
+![Timeline of REACT data assets](assets/react-datasets-timeline-v2.svg)

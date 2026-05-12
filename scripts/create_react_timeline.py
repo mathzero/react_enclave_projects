@@ -15,7 +15,7 @@ from textwrap import wrap
 ROOT = Path(__file__).resolve().parents[1]
 DATA_FILE = ROOT / "data" / "react_datasets_timeline.csv"
 CLINICAL_PHASE_FILE = ROOT / "data" / "react_clinical_cohort_phases.csv"
-OUT_FILE = ROOT / "assets" / "react-datasets-timeline.svg"
+OUT_FILE = ROOT / "assets" / "react-datasets-timeline-v2.svg"
 
 
 @dataclass
